@@ -1,4 +1,4 @@
-const CACHE = 'bomberom-pwa-v1';
+const CACHE = 'bomberom-pwa-v2';
 const SHELL = [
   './',
   './index.html',
