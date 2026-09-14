@@ -1,9 +1,11 @@
-const CACHE = 'bomberom-pwa-v2';
+const CACHE = 'bomberom-pwa-v3';
 const SHELL = [
   './',
   './index.html',
   './styles.css',
+  './styles.css?v=2',
   './app.js',
+  './app.js?v=2',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

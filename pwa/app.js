@@ -639,7 +639,7 @@ async function main() {
 
   if ('serviceWorker' in navigator) {
     try {
-      await navigator.serviceWorker.register('./sw.js');
+      await navigator.serviceWorker.register('./sw.js?v=3');
     } catch {
       /* ignore */
     }
