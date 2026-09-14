@@ -1,15 +1,16 @@
-const CACHE = 'bomberom-pwa-v3';
+const CACHE = 'bomberom-pwa-v4';
 const SHELL = [
   './',
   './index.html',
   './styles.css',
-  './styles.css?v=2',
+  './styles.css?v=3',
   './app.js',
-  './app.js?v=2',
+  './app.js?v=3',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './data/shelters.json',
+  './data/shelter-enrichment.json',
 ];
 
 self.addEventListener('install', (event) => {

@@ -31,6 +31,41 @@ const I18N = {
     disclaimerBody:
       'Appen viser kun offentlige tilfluktsrom registrert hos DSB. Private tilfluktsrom er ikke offentliggjort. Dette er et informasjonsverktøy og erstatter ikke offisiell beredskapsinformasjon. Kontroller skilting og lokale anvisninger på stedet.',
     dataUpdated: 'Data oppdatert: {date}',
+    enrichLocalName: 'Lokalnavn',
+    enrichEntrance: 'Inngang / veibeskrivelse',
+    enrichKommune: 'Kommune',
+    enrichMoh: 'Høyde over havet: {moh} m',
+    enrichStatusOppgradering: 'Under ombygging',
+    enrichStatusStengt: 'Stengt',
+    enrichStreetView: 'Åpne Street View',
+    enrichStreetViewComment:
+      'Offentlig tilfluktsrom skal ifølge DSB være skiltet utvendig med «TILFLUKTSROM». Bruk Street View for å orientere deg mot inngang — verifiser på stedet.',
+    romtypeParkeringshus: 'Parkeringshus',
+    romtypeIdrettshall: 'Idrettshall',
+    romtypeTunnel: 'T-bane / tunnel',
+    romtypeFjellanlegg: 'Fjellanlegg',
+    romtypeBrannstasjon: 'Brannstasjon',
+    romtypeSkole: 'Skole',
+    romtypeSykehjem: 'Sykehjem',
+    romtypeKai: 'Kai',
+    romtypeOffentlig: 'Offentlig tilfluktsrom',
+    enrichStructureFjellanlegg: 'Fjellanlegg',
+    enrichStructureUnderBygg: 'Under bygg',
+    enrichStructureTunnel: 'Tunnel / T-bane',
+    mapLegendTitle: 'Kartfarger',
+    mapLegendGreen: 'Inngang / god info',
+    mapLegendOrange: 'noe info',
+    mapLegendRed: 'Kun DSB-data',
+    alarmSignalsTitle: 'Varslingsanlegg (tyfoner / «flyalarmen»)',
+    alarmSignal1Title: 'Viktig melding – søk informasjon',
+    alarmSignal1Sound: 'Tre serier med tut, ett minutts pause mellom seriene.',
+    alarmSignal1Action: 'Søk informasjon om hva som skjer.',
+    alarmSignal2Title: 'Fare for angrep – søk dekning',
+    alarmSignal2Sound: 'Korte støt i cirka ett minutt.',
+    alarmSignal2Action: 'Søk dekning med én gang.',
+    alarmSignal3Title: 'Faren over',
+    alarmSignal3Sound: 'Sammenhengende tut i et halvt minutt.',
+    alarmSignal3Action: 'Faren er over.',
   },
   en: {
     subtitle: '{count} public shelters in Norway',
@@ -64,7 +99,60 @@ const I18N = {
     disclaimerBody:
       'The app only shows public shelters registered with DSB. Private shelters are not published. This is an information tool and does not replace official civil protection guidance. Always verify signage and local instructions on site.',
     dataUpdated: 'Data updated: {date}',
+    enrichLocalName: 'Local name',
+    enrichEntrance: 'Entrance / directions',
+    enrichKommune: 'Municipality',
+    enrichMoh: 'Elevation: {moh} m above sea level',
+    enrichStatusOppgradering: 'Under renovation',
+    enrichStatusStengt: 'Closed',
+    enrichStreetView: 'Open Street View',
+    enrichStreetViewComment:
+      'Public shelters should be marked outdoors with «TILFLUKTSROM» according to DSB. Use Street View to orient yourself toward the entrance — verify on site.',
+    romtypeParkeringshus: 'Parking garage',
+    romtypeIdrettshall: 'Sports hall',
+    romtypeTunnel: 'Metro / tunnel',
+    romtypeFjellanlegg: 'Mountain shelter',
+    romtypeBrannstasjon: 'Fire station',
+    romtypeSkole: 'School',
+    romtypeSykehjem: 'Nursing home',
+    romtypeKai: 'Quay',
+    romtypeOffentlig: 'Public shelter',
+    enrichStructureFjellanlegg: 'Mountain shelter',
+    enrichStructureUnderBygg: 'Under building',
+    enrichStructureTunnel: 'Tunnel / metro',
+    mapLegendTitle: 'Map colours',
+    mapLegendGreen: 'Entrance / good info',
+    mapLegendOrange: 'some info',
+    mapLegendRed: 'DSB data only',
+    alarmSignalsTitle: 'Warning sirens («air raid alarm»)',
+    alarmSignal1Title: 'Important message – seek information',
+    alarmSignal1Sound: 'Three series of blasts, one minute pause between series.',
+    alarmSignal1Action: 'Seek information about what is happening.',
+    alarmSignal2Title: 'Danger of attack – seek shelter',
+    alarmSignal2Sound: 'Short blasts for about one minute.',
+    alarmSignal2Action: 'Seek shelter immediately.',
+    alarmSignal3Title: 'All clear',
+    alarmSignal3Sound: 'Continuous blast for half a minute.',
+    alarmSignal3Action: 'The danger is over.',
   },
+};
+
+const ROMTYPE_KEYS = {
+  parkeringshus: 'romtypeParkeringshus',
+  idrettshall: 'romtypeIdrettshall',
+  tunnel: 'romtypeTunnel',
+  fjellanlegg: 'romtypeFjellanlegg',
+  brannstasjon: 'romtypeBrannstasjon',
+  skole: 'romtypeSkole',
+  sykehjem: 'romtypeSykehjem',
+  kai: 'romtypeKai',
+  offentlig_rom: 'romtypeOffentlig',
+};
+
+const STRUCTURE_KEYS = {
+  fjellanlegg: 'enrichStructureFjellanlegg',
+  under_bygg: 'enrichStructureUnderBygg',
+  tunnel: 'enrichStructureTunnel',
 };
 
 const COLORS = { green: '#2e7d32', orange: '#ef6c00', red: '#c62828' };
@@ -94,6 +182,7 @@ const el = {
   disclaimerTitle: document.getElementById('disclaimerTitle'),
   disclaimerBody: document.getElementById('disclaimerBody'),
   dataMeta: document.getElementById('dataMeta'),
+  footerExtras: document.getElementById('footerExtras'),
 };
 
 let locale = localStorage.getItem(LOCALE_KEY) || 'nb';
@@ -199,6 +288,111 @@ function applyChrome() {
   el.favBtn.setAttribute('aria-label', t('favorites'));
   el.settingsBtn.setAttribute('aria-label', t('settings'));
   document.documentElement.lang = locale;
+  renderFooterExtras();
+}
+
+function renderFooterExtras() {
+  if (!el.footerExtras) return;
+  el.footerExtras.innerHTML = `
+    <section class="info-block">
+      <h3>${escapeHtml(t('mapLegendTitle'))}</h3>
+      <ul class="legend-list">
+        <li><span class="legend-dot" style="background:${COLORS.green}"></span>${escapeHtml(t('mapLegendGreen'))}</li>
+        <li><span class="legend-dot" style="background:${COLORS.orange}"></span>${escapeHtml(t('mapLegendOrange'))}</li>
+        <li><span class="legend-dot" style="background:${COLORS.red}"></span>${escapeHtml(t('mapLegendRed'))}</li>
+      </ul>
+    </section>
+    <section class="info-block">
+      <h3>${escapeHtml(t('alarmSignalsTitle'))}</h3>
+      <div class="alarm-item">
+        <strong>${escapeHtml(t('alarmSignal1Title'))}</strong>
+        <p>${escapeHtml(t('alarmSignal1Sound'))}</p>
+        <p class="alarm-action">→ ${escapeHtml(t('alarmSignal1Action'))}</p>
+      </div>
+      <div class="alarm-item">
+        <strong>${escapeHtml(t('alarmSignal2Title'))}</strong>
+        <p>${escapeHtml(t('alarmSignal2Sound'))}</p>
+        <p class="alarm-action">→ ${escapeHtml(t('alarmSignal2Action'))}</p>
+      </div>
+      <div class="alarm-item">
+        <strong>${escapeHtml(t('alarmSignal3Title'))}</strong>
+        <p>${escapeHtml(t('alarmSignal3Sound'))}</p>
+        <p class="alarm-action">→ ${escapeHtml(t('alarmSignal3Action'))}</p>
+      </div>
+    </section>
+  `;
+}
+
+function streetViewUrl(lat, lon, override) {
+  if (override) return override;
+  return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}`;
+}
+
+function formatStatusLabel(e) {
+  if (!e?.status) return null;
+  const base =
+    e.status === 'stengt' ? t('enrichStatusStengt') : t('enrichStatusOppgradering');
+  if (e.status_published) {
+    const [y, m, d] = String(e.status_published).split('-');
+    const formatted = d && m && y ? `${d}.${m}.${y}` : e.status_published;
+    return `${base} (${formatted})`;
+  }
+  return base;
+}
+
+function renderEnrichmentHtml(e, lat, lon) {
+  const parts = [];
+  if (e.kommune) {
+    const extra = e.romtype_offentlig ? ` · ${e.romtype_offentlig}` : '';
+    parts.push(
+      `<p class="enrich-meta">${escapeHtml(t('enrichKommune'))}: ${escapeHtml(e.kommune)}${escapeHtml(extra)}</p>`,
+    );
+  }
+  if (e.lokalnavn) {
+    parts.push(
+      `<div class="enrich-row"><span class="enrich-label">${escapeHtml(t('enrichLocalName'))}</span><span>${escapeHtml(e.lokalnavn)}</span></div>`,
+    );
+  }
+  const romKey = e.romtype ? ROMTYPE_KEYS[e.romtype] : null;
+  const structKey = e.structure_type ? STRUCTURE_KEYS[e.structure_type] : null;
+  if (romKey || structKey) {
+    parts.push(
+      `<div class="badge-row">${
+        romKey ? `<span class="badge">${escapeHtml(t(romKey))}</span>` : ''
+      }${
+        structKey
+          ? `<span class="badge badge-outline">${escapeHtml(t(structKey))}</span>`
+          : ''
+      }</div>`,
+    );
+  }
+  if (e.inngang) {
+    parts.push(
+      `<div class="enrich-row"><span class="enrich-label">${escapeHtml(t('enrichEntrance'))}</span><span>${escapeHtml(e.inngang)}</span></div>`,
+    );
+  }
+  if (e.moh != null) {
+    parts.push(`<p class="enrich-meta">${escapeHtml(t('enrichMoh', { moh: e.moh }))}</p>`);
+  }
+  const statusLabel = formatStatusLabel(e);
+  if (statusLabel) {
+    parts.push(
+      `<div class="status-box"><strong>${escapeHtml(statusLabel)}</strong>${
+        e.status_quote
+          ? `<p class="status-quote">${escapeHtml(e.status_quote)}</p>`
+          : ''
+      }</div>`,
+    );
+  }
+  const sv = streetViewUrl(lat, lon, e.streetview_url);
+  const hint = e.streetview_comment || t('enrichStreetViewComment');
+  parts.push(`
+    <div class="streetview-row">
+      <a class="btn streetview" href="${escapeHtml(sv)}" target="_blank" rel="noopener">${escapeHtml(t('enrichStreetView'))}</a>
+      <p class="streetview-hint">${escapeHtml(hint)}</p>
+    </div>
+  `);
+  return `<div class="enrich-block">${parts.join('')}</div>`;
 }
 
 function makeDotIcon(quality, selected) {
@@ -294,20 +488,26 @@ function openShelter(shelter, pan = true) {
   const e = shelter.enrichment || enrichment[shelter.id] || {};
   const places =
     shelter.plasser != null ? t('capacity', { places: shelter.plasser }) : t('capacityUnknown');
+  const title = e.lokalnavn || shelter.adresse || '—';
+  const subtitle =
+    e.lokalnavn && shelter.adresse
+      ? `<p class="sheet-sub">${escapeHtml(shelter.adresse)}</p>`
+      : '';
   const rom =
     shelter.romnr != null ? `<p>${escapeHtml(t('romnr', { n: shelter.romnr }))}</p>` : '';
-  const lokal = e.lokalnavn ? `<p>${escapeHtml(e.lokalnavn)}</p>` : '';
-  const inngang = e.inngang ? `<p>${escapeHtml(e.inngang)}</p>` : '';
   const dist =
     userPos != null ? `<p>${escapeHtml(formatKm(haversineKm(userPos, shelter)))}</p>` : '';
   const favLabel = isFav(shelter.id) ? t('removeFav') : t('addFav');
   const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${shelter.latitude},${shelter.longitude}`;
+  const enrichHtml = renderEnrichmentHtml(e, shelter.latitude, shelter.longitude);
 
   el.sheetBody.innerHTML = `
-    <h3>${escapeHtml(shelter.adresse || '—')}</h3>
-    ${rom}${lokal}${inngang}
+    <h3>${escapeHtml(title)}</h3>
+    ${subtitle}
+    ${rom}
     <p>${escapeHtml(places)}</p>
     ${dist}
+    ${enrichHtml}
     <div class="row">
       <button type="button" class="btn" id="sheetFav">${escapeHtml(favLabel)}</button>
       <a class="btn primary" href="${navUrl}" target="_blank" rel="noopener">${escapeHtml(t('navigate'))}</a>
@@ -639,7 +839,7 @@ async function main() {
 
   if ('serviceWorker' in navigator) {
     try {
-      await navigator.serviceWorker.register('./sw.js?v=3');
+      await navigator.serviceWorker.register('./sw.js?v=4');
     } catch {
       /* ignore */
     }
