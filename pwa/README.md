@@ -15,4 +15,7 @@ npm run pwa             # http://127.0.0.1:8101
 - Leaflet + OpenStreetMap tiles (no CARTO API key)
 - Service worker caches **same-origin shell + data only** — never OSM tiles
 - Favorites / language / theme in `localStorage`
+- Sheet: enrichment + Street View + Google Maps navigate
+- Footer: map colour legend + DSB warning sirens
 - Sheet `z-index: 5000` so it sits above Leaflet
+- Public: https://faraheim.github.io/bomberom-releases/pwa/

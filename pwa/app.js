@@ -1,3 +1,5 @@
+import { diffShelterLists, fetchOfficialShelterDataset, reconcileShelterIds } from './geonorgeShelters.js';
+
 const I18N = {
   nb: {
     subtitle: '{count} offentlige tilfluktsrom i Norge',
@@ -69,6 +71,20 @@ const I18N = {
     multiHits: '{count} treff — velg i listen',
     coords: '{lat} · {lon}',
     clearSearch: 'Tøm søk',
+    shelterDataTitle: 'Tilfluktsrom-data',
+    shelterDataLocal: 'Lokal liste: {date} · {count} rom',
+    shelterDataRemote: 'Offentlig liste: {date} · {count} rom',
+    shelterDataHint:
+      'Krever nett. Henter offentlig liste fra Geonorge (DSB) og lagrer den i nettleseren.',
+    shelterDataCheck: 'Hent offentlig liste (DSB/Geonorge)',
+    shelterDataUpToDate: 'Listen er à jour med offentlig DSB-data.',
+    shelterDataDiff: '{added} nye, {removed} fjernet, {changed} endret',
+    shelterDataStampOnly: 'Nyere offentlig uttrekk (samme rom-ID-er).',
+    shelterDataApply: 'Bruk ny liste',
+    shelterDataCancel: 'Avbryt',
+    shelterDataApplying: 'Lagrer…',
+    shelterDataChecking: 'Henter…',
+    shelterDataCorsNote: '',
   },
   en: {
     subtitle: '{count} public shelters in Norway',
@@ -140,6 +156,20 @@ const I18N = {
     multiHits: '{count} matches — pick from the list',
     coords: '{lat} · {lon}',
     clearSearch: 'Clear search',
+    shelterDataTitle: 'Shelter data',
+    shelterDataLocal: 'Local list: {date} · {count} shelters',
+    shelterDataRemote: 'Public list: {date} · {count} shelters',
+    shelterDataHint:
+      'Needs internet. Fetches the public list from Geonorge (DSB) and stores it in this browser.',
+    shelterDataCheck: 'Fetch public list (DSB/Geonorge)',
+    shelterDataUpToDate: 'Your list matches the public DSB data.',
+    shelterDataDiff: '{added} new, {removed} removed, {changed} changed',
+    shelterDataStampOnly: 'Newer public extract (same shelter IDs).',
+    shelterDataApply: 'Use new list',
+    shelterDataCancel: 'Cancel',
+    shelterDataApplying: 'Saving…',
+    shelterDataChecking: 'Fetching…',
+    shelterDataCorsNote: '',
   },
 };
 
@@ -165,6 +195,7 @@ const COLORS = { green: '#2e7d32', orange: '#ef6c00', red: '#c62828' };
 const FAV_KEY = 'bomberom.favorites';
 const LOCALE_KEY = 'bomberom.locale';
 const THEME_KEY = 'bomberom.theme';
+const SHELTER_CACHE_KEY = 'bomberom.shelters-v3';
 
 const el = {
   status: document.getElementById('status'),
@@ -196,6 +227,8 @@ let themeMode = localStorage.getItem(THEME_KEY) || 'system';
 let shelters = [];
 let datasetInfo = { updated: '', count: 0, source: '' };
 let enrichment = {};
+/** romnr → enrichment (Geonorge lokalId rotates between extracts). */
+let enrichmentByRomnr = {};
 let favorites = loadFavorites();
 let view = 'map';
 let map;
@@ -250,7 +283,7 @@ function applyTheme() {
 }
 
 function markerQuality(shelter) {
-  const e = shelter.enrichment || enrichment[shelter.id] || {};
+  const e = enrichmentFor(shelter);
   if (e.marker_quality === 'green' || e.marker_quality === 'orange' || e.marker_quality === 'red') {
     return e.marker_quality;
   }
@@ -523,7 +556,7 @@ function escapeHtml(value) {
 
 function openShelter(shelter, pan = true) {
   setSelectedId(shelter.id);
-  const e = shelter.enrichment || enrichment[shelter.id] || {};
+  const e = enrichmentFor(shelter);
   const places =
     shelter.plasser != null ? t('capacity', { places: shelter.plasser }) : t('capacityUnknown');
   const title = e.lokalnavn || shelter.adresse || '—';
@@ -583,7 +616,7 @@ function filterByText(query) {
   if (!q) return shelters;
   return shelters.filter((s) => {
     const rom = s.romnr != null ? String(s.romnr) : '';
-    const e = s.enrichment || enrichment[s.id] || {};
+    const e = enrichmentFor(s);
     return (
       (s.adresse || '').toLowerCase().includes(q) ||
       rom.includes(q) ||
@@ -753,6 +786,46 @@ async function findNearest() {
   );
 }
 
+function formatShelterDate(value) {
+  if (!value) return '—';
+  const m = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : value;
+}
+
+function enrichmentFor(shelter) {
+  return (
+    shelter.enrichment ||
+    enrichment[shelter.id] ||
+    (shelter.romnr != null ? enrichmentByRomnr[shelter.romnr] : undefined) ||
+    {}
+  );
+}
+
+function applyShelterDataset(data) {
+  shelters = (data.shelters || []).map((s) => ({ ...s }));
+  datasetInfo = {
+    updated: data.updated || '',
+    count: data.count || shelters.length,
+    source: data.source || '',
+  };
+  shelters = shelters.map((s) => {
+    const e = enrichmentFor(s);
+    return Object.keys(e).length ? { ...s, enrichment: e } : s;
+  });
+}
+
+function persistShelterDataset(data) {
+  localStorage.setItem(
+    SHELTER_CACHE_KEY,
+    JSON.stringify({
+      updated: data.updated,
+      source: data.source || 'DSB via Geonorge',
+      count: data.shelters.length,
+      shelters: data.shelters,
+    }),
+  );
+}
+
 function openSettings() {
   el.modalTitle.textContent = t('settings');
   el.modalBody.innerHTML = `
@@ -771,6 +844,19 @@ function openSettings() {
         <option value="dark" ${themeMode === 'dark' ? 'selected' : ''}>${escapeHtml(t('themeDark'))}</option>
       </select>
     </div>
+    <div class="shelter-update">
+      <h3>${escapeHtml(t('shelterDataTitle'))}</h3>
+      <p class="meta" id="shelterLocalMeta">${escapeHtml(
+        t('shelterDataLocal', {
+          date: formatShelterDate(datasetInfo.updated),
+          count: datasetInfo.count || shelters.length,
+        }),
+      )}</p>
+      <p class="hint">${escapeHtml(t('shelterDataHint'))}</p>
+      <button type="button" class="primary-btn" id="shelterCheckBtn">${escapeHtml(t('shelterDataCheck'))}</button>
+      <p class="error" id="shelterUpdateError" hidden></p>
+      <div id="shelterUpdateResult" hidden></div>
+    </div>
   `;
   el.modal.hidden = false;
   document.getElementById('localeSel')?.addEventListener('change', (e) => {
@@ -783,6 +869,84 @@ function openSettings() {
     themeMode = e.target.value;
     localStorage.setItem(THEME_KEY, themeMode);
     applyTheme();
+  });
+
+  const errEl = document.getElementById('shelterUpdateError');
+  const resultEl = document.getElementById('shelterUpdateResult');
+  const checkBtn = document.getElementById('shelterCheckBtn');
+  let pendingRemote = null;
+
+  checkBtn?.addEventListener('click', async () => {
+    errEl.hidden = true;
+    resultEl.hidden = true;
+    pendingRemote = null;
+    checkBtn.disabled = true;
+    checkBtn.textContent = t('shelterDataChecking');
+    try {
+      const remote = await fetchOfficialShelterDataset();
+      const local = {
+        updated: datasetInfo.updated,
+        count: datasetInfo.count,
+        shelters,
+      };
+      const diff = diffShelterLists(local, remote);
+      pendingRemote = remote;
+      resultEl.hidden = false;
+      if (diff.isUpToDate) {
+        resultEl.innerHTML = `<p><strong>${escapeHtml(t('shelterDataUpToDate'))}</strong></p>
+          <p class="meta">${escapeHtml(
+            t('shelterDataRemote', {
+              date: formatShelterDate(diff.remoteUpdated),
+              count: diff.remoteCount,
+            }),
+          )}</p>`;
+      } else {
+        const summary =
+          diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0
+            ? t('shelterDataStampOnly')
+            : t('shelterDataDiff', {
+                added: diff.added.length,
+                removed: diff.removed.length,
+                changed: diff.changed.length,
+              });
+        resultEl.innerHTML = `<p><strong>${escapeHtml(summary)}</strong></p>
+          <p class="meta">${escapeHtml(
+            t('shelterDataRemote', {
+              date: formatShelterDate(diff.remoteUpdated),
+              count: diff.remoteCount,
+            }),
+          )}</p>
+          <div class="shelter-actions">
+            <button type="button" class="primary-btn" id="shelterApplyBtn">${escapeHtml(t('shelterDataApply'))}</button>
+            <button type="button" class="ghost-btn" id="shelterCancelBtn">${escapeHtml(t('shelterDataCancel'))}</button>
+          </div>`;
+        document.getElementById('shelterApplyBtn')?.addEventListener('click', () => {
+          if (!pendingRemote) return;
+          const reconciled = reconcileShelterIds(shelters, pendingRemote);
+          persistShelterDataset(reconciled);
+          applyShelterDataset(reconciled);
+          applyChrome();
+          rebuildMarkers(shelters);
+          renderList(currentFiltered());
+          openSettings();
+        });
+        document.getElementById('shelterCancelBtn')?.addEventListener('click', () => {
+          pendingRemote = null;
+          resultEl.hidden = true;
+        });
+      }
+    } catch (err) {
+      errEl.hidden = false;
+      const msg = err instanceof Error ? err.message : String(err);
+      const corsHint =
+        /Failed to fetch|NetworkError|CORS|TypeError/i.test(msg)
+          ? ' (CORS / nett — prøv app-versjonen hvis dette gjentar seg.)'
+          : '';
+      errEl.textContent = msg + corsHint;
+    } finally {
+      checkBtn.disabled = false;
+      checkBtn.textContent = t('shelterDataCheck');
+    }
   });
 }
 
@@ -824,23 +988,47 @@ function openFavorites() {
 }
 
 async function loadData() {
-  const [shelterRes, enrichRes] = await Promise.all([
-    fetch('./data/shelters.json'),
+  const [enrichRes, bundledRes] = await Promise.all([
     fetch('./data/shelter-enrichment.json').catch(() => null),
+    fetch('./data/shelters.json'),
   ]);
-  const data = await shelterRes.json();
-  shelters = (data.shelters || []).map((s) => ({ ...s }));
-  datasetInfo = {
-    updated: data.updated || '',
-    count: data.count || shelters.length,
-    source: data.source || '',
-  };
+  const bundled = await bundledRes.json();
   if (enrichRes && enrichRes.ok) {
     const enr = await enrichRes.json();
     enrichment = enr.entries || {};
-    shelters = shelters.map((s) =>
-      enrichment[s.id] ? { ...s, enrichment: enrichment[s.id] } : s,
-    );
+  }
+  enrichmentByRomnr = {};
+  for (const s of bundled.shelters || []) {
+    if (s.romnr != null && enrichment[s.id]) {
+      enrichmentByRomnr[s.romnr] = enrichment[s.id];
+    }
+  }
+
+  try {
+    const cached = JSON.parse(localStorage.getItem(SHELTER_CACHE_KEY) || 'null');
+    if (
+      cached &&
+      Array.isArray(cached.shelters) &&
+      cached.shelters.length > 0 &&
+      cached.shelters.length === cached.count
+    ) {
+      applyShelterDataset(cached);
+      return;
+    }
+  } catch {
+    // fall through to bundled JSON
+  }
+
+  applyShelterDataset(bundled);
+  try {
+    persistShelterDataset({
+      updated: bundled.updated,
+      source: bundled.source,
+      count: bundled.shelters?.length || 0,
+      shelters: bundled.shelters || [],
+    });
+  } catch {
+    // ignore quota
   }
 }
 
@@ -895,7 +1083,7 @@ async function main() {
 
   if ('serviceWorker' in navigator) {
     try {
-      await navigator.serviceWorker.register('./sw.js?v=5');
+      await navigator.serviceWorker.register('./sw.js?v=7');
     } catch {
       /* ignore */
     }

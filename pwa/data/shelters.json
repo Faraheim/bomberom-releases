@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-13T01:41:01",
+  "updated": "2026-09-15T01:40:03",
   "source": "DSB via Geonorge",
   "count": 556,
   "shelters": [
@@ -3743,9 +3743,9 @@
       "id": "586c618f-4a04-4bf1-a9af-c5661512fc17",
       "romnr": 31679,
       "plasser": 200,
-      "adresse": "T - Senteret, Offentlig T-rom",
-      "latitude": 63.687737,
-      "longitude": 9.665849
+      "adresse": "Yrjars gate 11",
+      "latitude": 63.689241,
+      "longitude": 9.664987
     },
     {
       "id": "97022012-e8aa-463c-9929-628497b1ee1e",

@@ -324,6 +324,56 @@ main {
   border-top: 1px solid var(--border);
 }
 .setting-row:first-of-type { border-top: none; }
+.shelter-update {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.shelter-update h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.shelter-update .hint,
+.shelter-update .meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.shelter-update .error {
+  margin: 0;
+  color: #c62828;
+  font-size: 0.85rem;
+}
+.shelter-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.primary-btn,
+.ghost-btn {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+.primary-btn {
+  background: var(--accent, #00965e);
+  color: #fff;
+  border-color: transparent;
+}
+.ghost-btn {
+  background: var(--surface);
+  color: var(--text);
+}
+.primary-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
 .fav-row {
   display: flex;
   gap: 8px;
