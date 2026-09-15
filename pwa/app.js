@@ -66,6 +66,9 @@ const I18N = {
     alarmSignal3Title: 'Faren over',
     alarmSignal3Sound: 'Sammenhengende tut i et halvt minutt.',
     alarmSignal3Action: 'Faren er over.',
+    multiHits: '{count} treff — velg i listen',
+    coords: '{lat} · {lon}',
+    clearSearch: 'Tøm søk',
   },
   en: {
     subtitle: '{count} public shelters in Norway',
@@ -134,6 +137,9 @@ const I18N = {
     alarmSignal3Title: 'All clear',
     alarmSignal3Sound: 'Continuous blast for half a minute.',
     alarmSignal3Action: 'The danger is over.',
+    multiHits: '{count} matches — pick from the list',
+    coords: '{lat} · {lon}',
+    clearSearch: 'Clear search',
   },
 };
 
@@ -406,6 +412,34 @@ function makeDotIcon(quality, selected) {
   });
 }
 
+const markersById = new Map();
+
+function syncSelectedMarkerIcons(prevId, nextId) {
+  if (prevId && markersById.has(prevId)) {
+    const shelter = shelters.find((s) => s.id === prevId);
+    if (shelter) {
+      markersById.get(prevId).setIcon(makeDotIcon(markerQuality(shelter), false));
+    }
+  }
+  if (nextId && markersById.has(nextId)) {
+    const shelter = shelters.find((s) => s.id === nextId);
+    if (shelter) {
+      markersById.get(nextId).setIcon(makeDotIcon(markerQuality(shelter), true));
+    }
+  }
+}
+
+function setSelectedId(nextId) {
+  const prev = selectedId;
+  selectedId = nextId;
+  syncSelectedMarkerIcons(prev, nextId);
+}
+
+function updateGpsVisibility() {
+  const show = view === 'map' && el.sheet.hidden;
+  el.gpsBtn.style.display = show ? 'block' : 'none';
+}
+
 function initMap() {
   map = L.map(el.map, { zoomControl: true }).setView([64.5, 11], 5);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -425,6 +459,7 @@ function initMap() {
 
 function rebuildMarkers(list) {
   cluster.clearLayers();
+  markersById.clear();
   for (const s of list) {
     const q = markerQuality(s);
     const m = L.marker([s.latitude, s.longitude], {
@@ -435,6 +470,7 @@ function rebuildMarkers(list) {
       openShelter(s, false);
     });
     m.shelterId = s.id;
+    markersById.set(s.id, m);
     cluster.addLayer(m);
   }
 }
@@ -445,7 +481,7 @@ function setView(next) {
   el.viewList.classList.toggle('on', view === 'list');
   el.map.style.display = view === 'map' ? 'block' : 'none';
   el.listWrap.hidden = view !== 'list';
-  el.gpsBtn.style.display = view === 'map' ? 'block' : 'none';
+  updateGpsVisibility();
   if (view === 'map') {
     setTimeout(() => map.invalidateSize(true), 50);
   }
@@ -453,12 +489,14 @@ function setView(next) {
 
 function renderList(list) {
   if (!list.length) {
-    el.list.innerHTML = `<p class="lead">${t('listEmpty')}</p>`;
+    el.list.innerHTML = `<p class="lead">${escapeHtml(t('listEmpty'))}</p>`;
     return;
   }
   const ref = userPos;
   const ranked = [...list].sort((a, b) => {
-    if (!ref) return a.adresse.localeCompare(b.adresse, 'nb');
+    if (!ref) {
+      return (a.adresse || '').localeCompare(b.adresse || '', 'nb');
+    }
     return haversineKm(ref, a) - haversineKm(ref, b);
   });
   el.list.innerHTML = ranked
@@ -484,13 +522,17 @@ function escapeHtml(value) {
 }
 
 function openShelter(shelter, pan = true) {
-  selectedId = shelter.id;
+  setSelectedId(shelter.id);
   const e = shelter.enrichment || enrichment[shelter.id] || {};
   const places =
     shelter.plasser != null ? t('capacity', { places: shelter.plasser }) : t('capacityUnknown');
   const title = e.lokalnavn || shelter.adresse || '—';
+  const sameName =
+    e.lokalnavn &&
+    shelter.adresse &&
+    e.lokalnavn.trim().toLowerCase() === shelter.adresse.trim().toLowerCase();
   const subtitle =
-    e.lokalnavn && shelter.adresse
+    e.lokalnavn && shelter.adresse && !sameName
       ? `<p class="sheet-sub">${escapeHtml(shelter.adresse)}</p>`
       : '';
   const rom =
@@ -499,7 +541,11 @@ function openShelter(shelter, pan = true) {
     userPos != null ? `<p>${escapeHtml(formatKm(haversineKm(userPos, shelter)))}</p>` : '';
   const favLabel = isFav(shelter.id) ? t('removeFav') : t('addFav');
   const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${shelter.latitude},${shelter.longitude}`;
-  const enrichHtml = renderEnrichmentHtml(e, shelter.latitude, shelter.longitude);
+  const enrichHtml = renderEnrichmentHtml(
+    sameName ? { ...e, lokalnavn: undefined } : e,
+    shelter.latitude,
+    shelter.longitude,
+  );
 
   el.sheetBody.innerHTML = `
     <h3>${escapeHtml(title)}</h3>
@@ -514,6 +560,7 @@ function openShelter(shelter, pan = true) {
     </div>
   `;
   el.sheet.hidden = false;
+  updateGpsVisibility();
   document.getElementById('sheetFav')?.addEventListener('click', () => {
     toggleFav(shelter.id);
     openShelter(shelter, false);
@@ -522,12 +569,13 @@ function openShelter(shelter, pan = true) {
   if (pan && view === 'map') {
     map.setView([shelter.latitude, shelter.longitude], Math.max(map.getZoom(), 14));
   }
-  rebuildMarkers(currentFiltered());
 }
 
 function closeSheet() {
   el.sheet.hidden = true;
-  selectedId = null;
+  setSelectedId(null);
+  updateGpsVisibility();
+  setTimeout(() => map?.invalidateSize(true), 50);
 }
 
 function filterByText(query) {
@@ -611,6 +659,7 @@ async function runSearch(submit = false) {
   const q = el.q.value.trim();
   el.geoChoices.hidden = true;
   if (!q) {
+    applyChrome();
     rebuildMarkers(shelters);
     renderList(shelters);
     return;
@@ -619,9 +668,14 @@ async function runSearch(submit = false) {
   if (textHits.length) {
     rebuildMarkers(textHits);
     renderList(textHits);
-    if (submit && textHits[0]) {
-      setView('map');
-      openShelter(textHits[0], true);
+    if (submit) {
+      if (textHits.length === 1) {
+        setView('map');
+        openShelter(textHits[0], true);
+      } else {
+        setView('list');
+        el.status.textContent = t('multiHits', { count: textHits.length });
+      }
     }
     return;
   }
@@ -669,6 +723,8 @@ async function findNearest() {
     alert(t('gpsFail'));
     return;
   }
+  el.q.value = '';
+  el.geoChoices.hidden = true;
   el.gpsBtn.disabled = true;
   el.gpsBtn.textContent = t('gpsBusy');
   navigator.geolocation.getCurrentPosition(
@@ -839,7 +895,7 @@ async function main() {
 
   if ('serviceWorker' in navigator) {
     try {
-      await navigator.serviceWorker.register('./sw.js?v=4');
+      await navigator.serviceWorker.register('./sw.js?v=5');
     } catch {
       /* ignore */
     }
